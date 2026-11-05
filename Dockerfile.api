@@ -1,0 +1,44 @@
+FROM python:3.12-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH=/opt/venv/bin:$PATH
+
+RUN python -m venv /opt/venv
+WORKDIR /build
+
+# The champions only load with the library versions they were saved with, so those versions
+# (written by MLflow next to each model) constrain the install.
+COPY models_export/classifier/requirements.txt /tmp/model-requirements.txt
+COPY pyproject.toml README.md ./
+COPY src/olist_platform/__init__.py src/olist_platform/
+RUN pip install -c /tmp/model-requirements.txt ".[api]"
+
+COPY src ./src
+RUN pip install --no-deps .
+
+FROM python:3.12-slim
+
+# LightGBM links against OpenMP at runtime.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH=/opt/venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    API_BUNDLE_DIR=/app/models_export \
+    MLFLOW_DISABLE_AGENT_HINT=1
+
+COPY --from=builder /opt/venv /opt/venv
+WORKDIR /app
+# Fallback bundle: the image serves it when no MLflow is reachable (e.g. a free deploy).
+COPY models_export ./models_export
+
+RUN useradd --create-home --uid 1000 api
+USER api
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+CMD ["uvicorn", "--factory", "olist_platform.api.app:create_app", "--host", "0.0.0.0", "--port", "8000"]
