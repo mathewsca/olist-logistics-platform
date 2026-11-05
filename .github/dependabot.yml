@@ -1,0 +1,32 @@
+# Monthly, grouped updates: one PR per ecosystem instead of one per package.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns: ["*"]
+    ignore:
+      # dbt v2 has no Postgres adapter; Evidently 0.8 breaks the monitoring API.
+      - dependency-name: dbt-core
+        update-types: ["version-update:semver-major"]
+      - dependency-name: evidently
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directories: ["/", "/airflow"]
+    schedule:
+      interval: monthly
+    groups:
+      images:
+        patterns: ["*"]
