@@ -63,7 +63,7 @@ monitoring = [
     "evidently>=0.7,<0.8",
     "olist-platform[ml]",
     # Evidently 0.7 imports a private pandas helper that pandas 3 removed.
-    "pandas>=2.2,<3",
+    "pandas>=2.2,<4",
 ]
 dev = [
     # FastAPI's TestClient; recent Starlette prefers httpx2 but still accepts httpx.
