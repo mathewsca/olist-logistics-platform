@@ -1,0 +1,215 @@
+version: 2
+
+models:
+  - name: stg_olist__customers
+    description: Customers typed and normalized. Grain is customer_id, which Olist generates per order.
+    columns:
+      - name: customer_id
+        description: Customer key of one order.
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: The actual person; use it for cohorts and repeat purchases.
+        data_tests: [not_null]
+      - name: customer_zip_code_prefix
+        description: First five digits of the zip code (text, keeps leading zeros).
+        data_tests: [not_null]
+      - name: customer_city
+        description: City name, lower case.
+      - name: customer_state
+        description: Brazilian state code (UF).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: &brazilian_states
+                  [AC, AL, AM, AP, BA, CE, DF, ES, GO, MA, MG, MS, MT, PA, PB, PE, PI, PR, RJ, RN, RO, RR, RS, SC, SE, SP, TO]
+
+  - name: stg_olist__geolocation
+    description: Geolocation points typed. Many rows per zip code prefix; deduplicated in intermediate.
+    columns:
+      - name: zip_code_prefix
+        description: First five digits of the zip code.
+        data_tests: [not_null]
+      - name: latitude
+        data_tests: [not_null]
+      - name: longitude
+        data_tests: [not_null]
+
+  - name: stg_olist__order_items
+    description: Order items typed. Grain is order_id + order_item_id.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [order_id, order_item_id]
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__orders')
+                field: order_id
+      - name: order_item_id
+        description: Sequential number of the item inside the order, starting at 1.
+        data_tests: [not_null]
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__products')
+                field: product_id
+      - name: seller_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__sellers')
+                field: seller_id
+      - name: shipping_limit_at
+        description: Deadline for the seller to hand the item to the carrier.
+      - name: price
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: freight_value
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: stg_olist__order_payments
+    description: Payments typed. Grain is order_id + payment_sequential.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [order_id, payment_sequential]
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__orders')
+                field: order_id
+      - name: payment_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [credit_card, boleto, voucher, debit_card, not_defined]
+      - name: payment_installments
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: payment_value
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: stg_olist__order_reviews
+    description: >
+      Reviews typed. Grain is review_id + order_id: the source reuses a review_id across orders,
+      and an order can have more than one review.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [review_id, order_id]
+    columns:
+      - name: review_id
+        data_tests: [not_null]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__orders')
+                field: order_id
+      - name: review_score
+        description: Satisfaction score from 1 to 5.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+                quote: false
+      - name: review_created_date
+        description: Date the review survey was sent to the customer.
+      - name: review_answered_at
+        description: When the customer answered the survey.
+
+  - name: stg_olist__orders
+    description: Orders typed. Grain is order_id.
+    columns:
+      - name: order_id
+        description: Order key.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__customers')
+                field: customer_id
+      - name: order_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [created, approved, invoiced, processing, shipped, delivered, canceled, unavailable]
+      - name: purchased_at
+        description: Purchase instant; the only order timestamp available at prediction time.
+        data_tests: [not_null]
+      - name: approved_at
+        description: Payment approval (after the purchase).
+      - name: delivered_to_carrier_at
+        description: Hand-off to the carrier (after the purchase).
+      - name: delivered_to_customer_at
+        description: Delivery to the customer (after the purchase).
+      - name: estimated_delivery_date
+        description: Delivery date promised by Olist at purchase time.
+        data_tests: [not_null]
+
+  - name: stg_olist__products
+    description: Products typed; the misspelled *_lenght source columns are renamed to *_length.
+    columns:
+      - name: product_id
+        description: Product key.
+        data_tests: [unique, not_null]
+      - name: product_category_name
+        description: Category in Portuguese; null when the source has none.
+      - name: product_weight_g
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: stg_olist__sellers
+    description: Sellers typed and normalized. Grain is seller_id.
+    columns:
+      - name: seller_id
+        description: Seller key.
+        data_tests: [unique, not_null]
+      - name: seller_zip_code_prefix
+        data_tests: [not_null]
+      - name: seller_state
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: *brazilian_states
+
+  - name: stg_olist__product_category_translation
+    description: Portuguese to English category names.
+    columns:
+      - name: product_category_name
+        data_tests: [unique, not_null]
+      - name: product_category_name_english
+        data_tests: [not_null]

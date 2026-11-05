@@ -1,0 +1,11 @@
+test_name,model,issue,treatment
+assert_geolocation_points_inside_brazil,stg_olist__geolocation,Coordenadas de GPS fora do Brasil,Descartadas antes da mediana por prefixo de CEP
+customer_zip_code_has_geolocation,dim_customers,Prefixo de CEP do cliente sem geolocalização,distance_km fica nulo e o modelo imputa
+seller_zip_code_has_geolocation,dim_sellers,Prefixo de CEP do vendedor sem geolocalização,distance_km fica nulo e o modelo imputa
+assert_product_category_has_translation,stg_olist__products,Categoria sem tradução para o inglês,Mantém o nome em português
+assert_review_id_belongs_to_one_order,stg_olist__order_reviews,review_id compartilhado por mais de um pedido,A avaliação é escolhida por pedido (a mais recente)
+assert_delivered_orders_have_delivery_date,stg_olist__orders,Pedido entregue sem data de entrega,Fica fora de fct_deliveries
+assert_delivery_date_only_on_delivered_orders,stg_olist__orders,Data de entrega em pedido não entregue,Fica fora de fct_deliveries
+assert_carrier_handoff_not_before_purchase,stg_olist__orders,Envio à transportadora antes da compra,Mantido; seller_handling_days fica negativo
+assert_delivery_not_before_carrier_handoff,stg_olist__orders,Entrega ao cliente antes do envio à transportadora,Mantido; carrier_transit_days fica negativo
+assert_payment_matches_items_and_freight,fct_orders,Valor pago difere de itens + frete em mais de R$ 1,Mantido: juros de parcelamento e vouchers

@@ -1,0 +1,94 @@
+name: dbt docs
+
+# Builds the dbt project against the fixture CSVs (the real dataset is never stored in CI) and
+# publishes the documentation and lineage to GitHub Pages. On pull requests it only validates.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "dbt/**"
+      - "src/olist_platform/ingestion/**"
+      - "src/olist_platform/transform/**"
+      - "tests/fixtures/**"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: dbt build & docs
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: olist
+          POSTGRES_USER: olist
+          POSTGRES_PASSWORD: ci_only_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U olist -d olist"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      WAREHOUSE_HOST: localhost
+      WAREHOUSE_PORT: "5432"
+      WAREHOUSE_DB: olist
+      WAREHOUSE_USER: olist
+      WAREHOUSE_PASSWORD: ci_only_password
+      OLIST_LANDING_DIR: tests/fixtures/landing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: pip install ".[ingestion,dbt]"
+
+      - name: Load fixtures into raw
+        run: |
+          python -m olist_platform.ingestion load
+          python -m olist_platform.ingestion check
+
+      - name: dbt build
+        run: python -m olist_platform.transform build
+
+      - name: dbt docs
+        run: |
+          python -m olist_platform.transform docs generate --static
+          mkdir -p _site
+          cp dbt/target/static_index.html _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

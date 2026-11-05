@@ -1,0 +1,43 @@
+name: olist
+version: "0.1.0"
+config-version: 2
+profile: olist
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Covers every purchase, delivery and promised date in the dataset (2016-09-04 to 2018-11-12).
+  calendar_start: "2016-01-01"
+  calendar_end: "2019-01-01"
+  # Bounding box of Brazil (Fernando de Noronha included), used to drop points with broken coordinates.
+  brazil_min_lat: -33.8
+  brazil_max_lat: 5.3
+  brazil_min_lng: -74.0
+  brazil_max_lng: -32.0
+
+models:
+  olist:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  olist:
+    +schema: marts
+
+data_tests:
+  olist:
+    # Failing rows land in the audit schema, so every violation count can be inspected with SQL.
+    +store_failures: true
+    +schema: audit

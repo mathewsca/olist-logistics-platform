@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: int_geolocation__by_zip_prefix
+    description: >
+      One point per zip code prefix: median latitude/longitude of the source points inside
+      Brazil's bounding box. Prefixes whose points all fall outside the box are dropped.
+    columns:
+      - name: zip_code_prefix
+        description: First five digits of the zip code; the finest location the dataset exposes.
+        data_tests: [unique, not_null]
+      - name: latitude
+        data_tests: [not_null]
+      - name: longitude
+        data_tests: [not_null]
+      - name: point_count
+        description: Number of source points behind the median.
+
+  - name: int_products__categorized
+    description: Products with the English category, falling back to the Portuguese name when untranslated.
+    columns:
+      - name: product_id
+        description: Product key.
+        data_tests: [unique, not_null]
+
+  - name: int_order_items__enriched
+    description: Order items with product category (translated) and seller location.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [order_id, order_item_id]
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: ref('stg_olist__order_items')
+    columns:
+      - name: order_id
+        description: Order key; with order_item_id, the grain of the model.
+      - name: product_id
+        description: Product of the item.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__products')
+                field: product_id
+      - name: seller_id
+        description: Seller of the item.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__sellers')
+                field: seller_id
+
+  - name: int_orders__items_summary
+    description: Item totals per order and the main seller (seller of the most expensive item).
+    columns:
+      - name: order_id
+        description: Order key (only orders with items).
+        data_tests: [unique, not_null]
+      - name: main_seller_id
+        description: Seller of the most expensive item; the origin of the order route.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__sellers')
+                field: seller_id
+
+  - name: int_orders__payments_summary
+    description: Payment totals per order and the payment type with the highest value.
+    columns:
+      - name: order_id
+        description: Order key (only orders with payments).
+        data_tests: [unique, not_null]
+
+  - name: int_orders__latest_review
+    description: The most recent review of each order and how many reviews the order had.
+    columns:
+      - name: order_id
+        description: Order key (only reviewed orders).
+        data_tests: [unique, not_null]
+      - name: has_review_comment
+        description: The latest review has a written message.
+      - name: review_mentions_delivery
+        description: The latest review's comment mentions delivery; null without a comment.

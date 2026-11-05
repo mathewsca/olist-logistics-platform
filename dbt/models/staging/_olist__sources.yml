@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: olist
+    description: >
+      Brazilian E-Commerce Public Dataset by Olist, loaded as-is (every column as text) by the
+      ingestion pipeline. Each table also has _loaded_at and _source_file for lineage.
+    schema: raw
+    tables:
+      - name: customers
+        description: One row per customer_id; the id is generated per order (see customer_unique_id).
+      - name: geolocation
+        description: Zip code prefix to lat/lng, with many points per prefix.
+      - name: order_items
+        description: One row per item of an order.
+      - name: order_payments
+        description: One row per payment of an order.
+      - name: order_reviews
+        description: Customer reviews; review_id alone is not unique in the source.
+      - name: orders
+        description: One row per order, with status and lifecycle timestamps.
+      - name: products
+        description: Product catalog; the *_lenght columns are misspelled in the source.
+      - name: sellers
+        description: One row per seller.
+      - name: product_category_name_translation
+        description: Portuguese to English category names.
