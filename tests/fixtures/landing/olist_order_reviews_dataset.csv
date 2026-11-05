@@ -1,0 +1,4 @@
+"review_id","order_id","review_score","review_comment_title","review_comment_message","review_creation_date","review_answer_timestamp"
+"r1","o1",5,,"Chegou antes do prazo.
+Recomendo!","2017-10-11 00:00:00","2017-10-12 03:43:48"
+"r2","o2",1,"Atrasou","Produto não chegou","2018-08-20 00:00:00","2018-08-21 10:00:00"
